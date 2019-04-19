@@ -1,0 +1,11 @@
+::pki::pkcs11::loadmodule <filename>                       -> handle
+::pki::pkcs11::unloadmodule <handle>                       -> true/false
+::pki::pkcs11::listslots  <handle>                         -> list: slotId label flags
+::pki::pkcs11::listcerts  <handle> <slotId>                -> list: keylist
+::pki::pkcs11::encrypt <mode> <input> <keylist>            -> data
+::pki::pkcs11::decrypt <mode> <input> <keylist>            -> data
+::pki::pkcs11::login <handle> <slotId> <password>          -> true/false
+::pki::pkcs11::logout <handle> <slotId>                    -> true/false
+
+# Future
+::pki::pkcs11::listobjects <handle> <slotId>               -> list: ....

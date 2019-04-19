@@ -1,0 +1,9 @@
+The following files are from RSA Cryptoki v2.20:
+	pkcs11.h
+	pkcs11f.h
+	pkcs11t.h
+
+Copyright RSA Security Inc. PKCS #11 Cryptographic Token Interface (Cryptoki)
+
+This project is derived from the RSA Security Inc. PKCS #11 Cryptographic
+Token Interface (Cryptoki).

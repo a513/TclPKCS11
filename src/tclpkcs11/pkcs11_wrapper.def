@@ -1,0 +1,7 @@
+; ssfdll.def : Declares the module parameters for the DLL.
+
+LIBRARY      "tclpkcs11"
+
+EXPORTS
+    ; Explicit exports can go here
+    Tclpkcs11_Init
