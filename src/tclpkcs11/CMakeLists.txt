@@ -19,10 +19,12 @@ IF (CMAKE_HOST_WIN32)
     ENDIF (CMAKE_SIZEOF_VOID_P EQUAL 8)
     
 ELSEIF (CMAKE_HOST_APPLE)
+    set_target_properties(${LIBRARY_NAME} PROPERTIES PREFIX "")
     SET(CW_LIRBASE "${CMAKE_CURRENT_SOURCE_DIR}/tclpkcs11-mac")
 # TODO: OS X version
 ELSEIF (CMAKE_HOST_UNIX)
-
+#    set_target_properties(target-name PROPERTIES PREFIX "")
+    set_target_properties(${LIBRARY_NAME} PROPERTIES PREFIX "")
     SET(CW_LIRBASE "${CMAKE_CURRENT_SOURCE_DIR}/tclpkcs11-linux")
 
 #VREMENNO
@@ -35,6 +37,14 @@ ELSEIF (CMAKE_HOST_UNIX)
     ENDIF (CMAKE_SIZEOF_VOID_P EQUAL 8)
 ENDIF (CMAKE_HOST_WIN32)
 
+# 32 or 64
+#if (64BIT)
+#	set (CW_ARCH x86_64)
+#else (64BIT)
+#	set (CW_ARCH x86)
+#endif (64BIT)
+# FOR x86_64
+#	set (CW_ARCH x86_64)
 
 
 INCLUDE_DIRECTORIES(
@@ -59,7 +69,7 @@ ELSEIF (CMAKE_HOST_APPLE)
 # TODO: OS X version
     TARGET_LINK_LIBRARIES(
         ${LIBRARY_NAME}
-	${CW_LIB_PREFIX}/tcl/tclstub.a
+	${CW_LIB_PREFIX}/tcl/libtclstub.a
 
     )
 ELSEIF (CMAKE_HOST_UNIX)

@@ -16,8 +16,8 @@ proc ::cert_to_der {data} {
 }
 
 #set pkcs11_module "/usr/local/lib/libcackey.so"
-set pkcs11_module "/usr/local/lib64/libls11sw2016.so"
-#set pkcs11_module "/usr/local/lib64/librtpkcs11ecp_2.0.so"
+#set pkcs11_module "/usr/local/lib64/libls11sw2016.so"
+set pkcs11_module "/usr/local/lib64/librtpkcs11ecp_2.0.so"
 
 puts "START TEST"
 load ./tclpkcs11.so Tclpkcs11
@@ -72,6 +72,7 @@ lappend uu "pkcs11_label"
 lappend uu $labCert
 puts "LISTforP11=$uu"
 set pkcs11id [pki::pkcs11::importcert $cert_der_hex $uu]
+puts "PKCS11ID=$pkcs11id"
 unset uu
 set uu [dict create pkcs11_handle $handle]
 dict set uu pkcs11_slotid $token_slotid
@@ -82,7 +83,7 @@ gets stdin yes
 if {$yes == "да"} {
     puts "Введите новую метку для сертификата"
     gets stdin labCert
-dict set uu pkcs11_slotid $token_slotid
+#dict set uu pkcs11_slotid $token_slotid
 lappend uu "pkcs11_label"
 lappend uu $labCert
     pki::pkcs11::rename all $uu

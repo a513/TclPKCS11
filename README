@@ -1,0 +1,44 @@
+                                tclpkcs11 0.9.9
+
+Release information:
+  pkg:  tclpkcs11 version 0.9.9
+  url:  http://www.rkeene.org/devel/tclpkcs11-0.9.9.tar.gz
+  date: Thu Jun 30 00:23:36 CDT 2011
+--------------------------------------------------------------------------
+
+PKCS#11 Extension for Tcl.
+
+Can be used to load a PKCS#11 module (e.g., ActivClient, ActivCard,
+CoolKey, CACKey) and perform cryptographic operations.
+
+This package requires the "pki" extension, which is pure Tcl and can be
+found in Tcllib.
+
+Installation:
+	./configure
+	make
+	cp tclpkcs11.so pkgIndex.tcl /dest
+
+
+                                tclpkcs11 1.0.1
+
+
+Release information:
+  pkg:  tclpkcs11 version 1.0.1
+  url:  https://github.com/a513/TclPKCS11
+  date: Thu Apr 18 18:20:30 CDT 2019
+--------------------------------------------------------------------------
+
+PKCS#11 Extension for Tcl.
+
+Can be used to load a PKCS#11 module with russian cryptographya
+and perform cryptographic operations.
+
+This package requires the "pki" extension, which is pure Tcl and can be
+found in Tcllib.
+
+Installation:
+a) for unix, linux, macos
+	./configure_cmake_unix_and_build.sh
+	cp build/lib/tclpkcs11.*  /dest
+b) ...

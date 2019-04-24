@@ -1,0 +1,31 @@
+tclpkcs11 0.9.9
+
+::pki::pkcs11::loadmodule <filename>                       -> handle
+::pki::pkcs11::unloadmodule <handle>                       -> true/false
+::pki::pkcs11::listslots  <handle>                         -> list: slotId label flags
+::pki::pkcs11::listcerts  <handle> <slotId>                -> list: keylist
+::pki::pkcs11::encrypt <mode> <input> <keylist>            -> data
+::pki::pkcs11::decrypt <mode> <input> <keylist>            -> data
+::pki::pkcs11::login <handle> <slotId> <password>          -> true/false
+::pki::pkcs11::logout <handle> <slotId>                    -> true/false
+
+# Future
+::pki::pkcs11::listobjects <handle> <slotId>               -> list: ....
+
+tclpkcs11 1.0.1
+
+::pki::pkcs11::listmechs  <handle>  <slotid>               -> list: mech
+::pki::pkcs11::listcertsder <handle> <slotid>   	   ->  list: cert_der pkcs11_handle pkcs11_id pkcs11_label pkcs11_slotid type
+::pki::pkcs11::importcert <cert_der_hex> <keylist> 	   -> pkcs11_id, 
+    where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid>}
+::pki::pkcs11::rеname <cert|key|all> <keylist>		   
+::pki::pkcs11::delete <cert|key|all> <keylist>, 
+    where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pkcs11_id <pkcs11_id}
+::pki::pkcs11::digest <gostr3411|stribog256|stribog512|sha1>  <source> <keylist> 	-> data, 
+    where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid>}
+::pki::pkcs11::verify <digest> <signature> <keylist> 	   -> true/false,
+    where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pubkeyinfo <asn1 pubkey> }
+::pki::pkcs11::sign <CKM_GOSTR3410|CKM_GOSTR3410_512> <digest_hex> <keylist> -> signature, 
+    where  <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pkcs11_id <pkcs11_id> }
+::pki::pkcs11::keypair <g12_256|g12_512> A <keylist> 	-> list: pubkey pubkey_algo pubkeyinfo type pkcs11_handle pkcs11_slotid pkcs11_id pkcs11_label
+    where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid>}

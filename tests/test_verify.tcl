@@ -64,7 +64,7 @@ chan configure $fd -translation binary
 set cert_user [read $fd]
 close $fd
 if {$cert_user == "" } {
-    usage 1 "Bad file with certificate: $file"
+    usage 1 "Bad file with certificate user: $file"
     exit
 }
 set cert_user [cert_to_der $cert_user]
@@ -101,7 +101,7 @@ if {$countcert == 1} {
     set cert_CA [read $fd]
     close $fd
     if {$cert_CA == "" } {
-	usage 1 "Bad file with certificate user=$fileca"
+	usage 1 "Bad file with certificate CA=$fileca"
 	exit
     }
     set cert_CA [cert_to_der $cert_CA]

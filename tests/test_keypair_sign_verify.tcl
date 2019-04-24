@@ -1,5 +1,7 @@
 #! /usr/bin/env tclsh
 
+encoding system utf-8
+
 #set pkcs11_module "/usr/local/lib/libcackey.so"
 set pkcs11_module "/usr/local/lib64/libls11sw2016.so"
 #set pkcs11_module "/usr/local/lib64/librtpkcs11ecp_2.0.so"
@@ -57,24 +59,69 @@ set aa [list "pkcs11_handle" $handle "pkcs11_slotid" $token_slotid]
 puts "Выберите тип генерируемой ключевой пары: 1 - gostr34.10-2012-512 иначе gostr34.10-2012-256"
 gets stdin yes
 
+if {$yes == "1"} {
+    set tbs_csr "Подпись по gostr3410-12-512"
+    set res "Ключевая пара gostr34.10-2012-512 создана"
+    set ckmpair CKM_GOSTR3410_512
+    set stribog "stribog512"
+    set key_type "g12_512"
+} else {
+    set tbs_csr "Подпись по gostr3410-12-256"
+    set res "Ключевая пара gostr34.10-2012-256 создана"
+    set ckmpair CKM_GOSTR3410
+    set stribog "stribog256"
+    set key_type "g12_256"
+}
+#Проверка наличия механизмов
+set llmech [pki::pkcs11::listmechs $handle $token_slotid]
+puts  "MECH=$llmech"
+switch -- $stribog {
+	    stribog256 {
+		    set err [string first "0xD4321012" $llmech]
+		}
+	    stribog512 {
+		    set err [string first "0xD4321013" $llmech]
+		}	
+	    gostr3411 {
+		    set err [string first "0x1210" $llmech]
+		}	
+	    default {
+		    set err -1
+	    }
+}
+if {$err == -1} {
+    puts  "Токен $token_slotlabel\nне поддерживает алгоритм хэширования \"$stribog\""
+#    exit
+}
+switch -- $key_type {
+	    g12_256 {
+		    set err [string first "0x1200" $llmech]
+		}
+	    g12_512 {
+		    set err [string first "0xD4321005" $llmech]
+		}	
+	    default {
+		    set err -1
+	    }
+}
+if {$err == -1} {
+    puts  "Токен $token_slotlabel\nне поддерживает алгоритм генерации ключей \"$ckmpair\_KEY_PAIR_GEN\""
+    exit
+}
+
 puts "Enter PIN user for you token \"$token_slotlabel\":"
 #set password "01234567"
 gets stdin password
 pki::pkcs11::login $handle $token_slotid $password
 
-if {$yes == "1"} {
-    set tbs_csr "Подпись по gostr3410-12-512"
-    array set genkey [::pki::pkcs11::keypair g12_512 A $aa ]
-    puts "Ключевая пара gostr34.10-2012-512 создана"
-    set digest_hex    [pki::pkcs11::digest "stribog512" $tbs_csr  $aa]
-    set ckmpair CKM_GOSTR3410_512
-} else {
-    set tbs_csr "Подпись по gostr3410-12-256"
-    array set genkey [::pki::pkcs11::keypair g12_256 A $aa ]
-    puts "Ключевая пара gostr34.10-2012-256 создана"
-    set digest_hex    [pki::pkcs11::digest "stribog256" $tbs_csr  $aa]
-    set ckmpair CKM_GOSTR3410
-}
+array set genkey [::pki::pkcs11::keypair $key_type A $aa ]
+puts $res
+#set digest_hex [pki::pkcs11::digest $stribog $tbs_csr  $aa]
+set digest_hex [pki::pkcs11::digest $stribog [encoding convertto utf-8 $tbs_csr]  $aa]
+#set digest_hex [pki::pkcs11::digest $stribog "1234567890"  $aa]
+puts "HASH=$stribog\ntbs=$tbs_csr\nDIGEST=$digest_hex"
+
+
 lappend aa "pkcs11_id"
 lappend aa $genkey(pkcs11_id)
 set sign1_hex  [pki::pkcs11::sign $ckmpair $digest_hex  $aa]
