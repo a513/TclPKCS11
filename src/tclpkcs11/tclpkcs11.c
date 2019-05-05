@@ -2953,22 +2953,13 @@ fprintf(stderr, "tclpkcs11_perform_pki_keypair CKK_GOSTR ERROR\n");
 MODULE_SCOPE int tclpkcs11_perform_pki_dgst(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
     GOSTR3411_2012_CTX ctx;
     unsigned char digest[64];
-    unsigned char contentData[1024];
     int rc = 0;
-    int rf;
-    int numBytes;
-    int numBytesS;
 
-	unsigned char *input, resultbuf[1024];
+	unsigned char *input;
 	char *algohash;
 	int input_len;
-	int i;
-	CK_ULONG resultbuf_len;
-	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL;
 	Tcl_Obj *tcl_mode, *tcl_input;
 	Tcl_Obj *tcl_result;
-	CK_RV chk_rv;
-	int tcl_rv;
 	int lenhash;
 
 	tcl_mode = objv[1];
@@ -2985,7 +2976,6 @@ MODULE_SCOPE int tclpkcs11_perform_pki_dgst(ClientData cd, Tcl_Interp *interp, i
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - bad digest", -1));
 		return(TCL_ERROR);
 	}
-////////////////////////
 	rc = GOSTR3411_2012_Init(&ctx, lenhash);
 	if (rc != 0) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - bad GOSTR3411_2012_Init stribog", -1));
@@ -3001,17 +2991,11 @@ MODULE_SCOPE int tclpkcs11_perform_pki_dgst(ClientData cd, Tcl_Interp *interp, i
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - GOSTR3411_2012_Final failed", -1));
 		return(TCL_ERROR);
 	}
-
-
-
-
-////////////////////
-
 	/* Convert the ID into a readable string */
 	tcl_result = tclpkcs11_bytearray_to_string(digest, lenhash);
 
 	Tcl_SetObjResult(interp, tcl_result);
-//fprintf(stderr,"tclpkcs11_perform_pki_digest OK len=%lu\n", resultbuf_len);
+//fprintf(stderr,"tclpkcs11_perform_pki_digest OK len=%lu\n", lenhash);
 
 	return(TCL_OK);
 }
