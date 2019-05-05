@@ -1184,7 +1184,7 @@ MODULE_SCOPE int tclpkcs11_list_slots(ClientData cd, Tcl_Interp *interp, int obj
 	struct tclpkcs11_handle *handle;
 	Tcl_HashEntry *tcl_handle_entry;
 	Tcl_Obj *tcl_handle;
-	Tcl_Obj *ret_list, *curr_item_list, *flags_list, *slot_desc;
+	Tcl_Obj *ret_list, *curr_item_list, *flags_list, *slot_desc, *token_desc;
 
 	CK_SLOT_ID_PTR slots;
 	CK_SLOT_INFO slotInfo;
@@ -1262,6 +1262,7 @@ MODULE_SCOPE int tclpkcs11_list_slots(ClientData cd, Tcl_Interp *interp, int obj
 		}
 
 		slot_desc = NULL;
+		token_desc = Tcl_NewObj();
 
 		if ((slotInfo.flags & CKF_TOKEN_PRESENT) == CKF_TOKEN_PRESENT) {
 			Tcl_ListObjAppendElement(interp, flags_list, Tcl_NewStringObj("TOKEN_PRESENT", -1));
@@ -1272,6 +1273,10 @@ MODULE_SCOPE int tclpkcs11_list_slots(ClientData cd, Tcl_Interp *interp, int obj
 				/* Add the token label as the slot label */
 				if (!slot_desc) {
 					slot_desc = Tcl_NewStringObj((const char *) tokenInfo.label, 32);
+					Tcl_ListObjAppendElement(interp, token_desc, Tcl_NewStringObj((const char *) tokenInfo.label, 32));
+					Tcl_ListObjAppendElement(interp, token_desc, Tcl_NewStringObj((const char *) tokenInfo.manufacturerID, 32));
+					Tcl_ListObjAppendElement(interp, token_desc, Tcl_NewStringObj((const char *) tokenInfo.model, 16));
+					Tcl_ListObjAppendElement(interp, token_desc, Tcl_NewStringObj((const char *) tokenInfo.serialNumber, 16));
 				}
 
 				if ((tokenInfo.flags & CKF_RNG) == CKF_RNG) {
@@ -1346,8 +1351,11 @@ MODULE_SCOPE int tclpkcs11_list_slots(ClientData cd, Tcl_Interp *interp, int obj
 			/* Add the slot description as the label for tokens with nothing in them */
 			Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj((const char *) slotInfo.slotDescription, 32));
 		}
-
+		
 		Tcl_ListObjAppendElement(interp, curr_item_list, flags_list);
+
+/*Descryption token*/
+		Tcl_ListObjAppendElement(interp, curr_item_list, token_desc);
 
 		Tcl_ListObjAppendElement(interp, ret_list, curr_item_list);
 	}
