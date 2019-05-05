@@ -5,7 +5,10 @@ ADD_LIBRARY(
     ${LIBRARY_NAME}
     SHARED
 #    STATIC
+    gost_r3411_2012.h
+    hash_bit.h
     tclpkcs11.c
+    gost_r3411_2012.c
     pkcs11_wrapper.def
 )
 

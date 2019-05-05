@@ -44,6 +44,7 @@
 #include "pkcs11.h"
 /*LISSI*/
 #include <pkcs11t_gost.h>
+#include "gost_r3411_2012.h"
 
 #ifdef _WIN32
 #  pragma pack(pop, cryptoki)
@@ -2941,6 +2942,71 @@ fprintf(stderr, "tclpkcs11_perform_pki_keypair CKK_GOSTR ERROR\n");
 }
 
 /*LISSI*/
+MODULE_SCOPE int tclpkcs11_perform_pki_dgst(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
+    GOSTR3411_2012_CTX ctx;
+    unsigned char digest[64];
+    unsigned char contentData[1024];
+    int rc = 0;
+    int rf;
+    int numBytes;
+    int numBytesS;
+
+	unsigned char *input, resultbuf[1024];
+	char *algohash;
+	int input_len;
+	int i;
+	CK_ULONG resultbuf_len;
+	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL;
+	Tcl_Obj *tcl_mode, *tcl_input;
+	Tcl_Obj *tcl_result;
+	CK_RV chk_rv;
+	int tcl_rv;
+	int lenhash;
+
+	tcl_mode = objv[1];
+	tcl_input = objv[2];
+	input = Tcl_GetByteArrayFromObj(tcl_input, &input_len);
+	algohash = Tcl_GetString(tcl_mode);
+//fprintf(stderr, "tclpkcs11_perform_pki_dgst objc=%d, algohash=%s\n",  objc,algohash);
+//fprintf(stderr, "tclpkcs11_perform_pki_dgst=%i, objc=%s\n", input_len, input);
+	if (!memcmp("stribog256", algohash, 10)) {
+	    lenhash = 32;
+	} else if (!memcmp("stribog512", algohash, 10)) {
+	    lenhash = 64;
+	} else {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - bad digest", -1));
+		return(TCL_ERROR);
+	}
+////////////////////////
+	rc = GOSTR3411_2012_Init(&ctx, lenhash);
+	if (rc != 0) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - bad GOSTR3411_2012_Init stribog", -1));
+		return(TCL_ERROR);
+	}
+	rc = GOSTR3411_2012_Update(&ctx, input, input_len); 
+	if (rc != 0) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - GOSTR3411_2012_Update failed", -1));
+		return(TCL_ERROR);
+	}
+	rc = GOSTR3411_2012_Final(&ctx, digest);
+	if (rc != 0) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::dgst stribog256|stribog512 input\" - GOSTR3411_2012_Final failed", -1));
+		return(TCL_ERROR);
+	}
+
+
+
+
+////////////////////
+
+	/* Convert the ID into a readable string */
+	tcl_result = tclpkcs11_bytearray_to_string(digest, lenhash);
+
+	Tcl_SetObjResult(interp, tcl_result);
+//fprintf(stderr,"tclpkcs11_perform_pki_digest OK len=%lu\n", resultbuf_len);
+
+	return(TCL_OK);
+}
 MODULE_SCOPE int tclpkcs11_perform_pki_digest(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
 	struct tclpkcs11_interpdata *interpdata;
 	struct tclpkcs11_handle *handle;
@@ -2981,7 +3047,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_digest(ClientData cd, Tcl_Interp *interp,
 	} else if (!memcmp("sha1", algohash, 4)) {
 	    mechanism = &mechanism_desc_sha1;
 	} else {
-		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::digest stribog256|stribog512 input\" - bad digest", -1));
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::digest stribog256|stribog512|gostr3411|sha1 input\" - bad digest", -1));
 		return(TCL_ERROR);
 	}
 //fprintf(stderr, "tclpkcs11_perform_pki_digest=%i, hash=%s\n", input_len, algohash);
@@ -3076,7 +3142,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_pubkeyinfo(ClientData cd, Tcl_Interp *int
     unsigned char *pks;
     CK_MECHANISM     mechanism_desc_sha1 = { CKM_SHA_1, NULL, 0 };
     CK_MECHANISM_PTR mechanism;
-    Tcl_Obj *obj_id, *obj_pubkeyinfo, *obj_pubkey;
+    Tcl_Obj *obj_id, *obj_pubkeyinfo, *obj_pubkey, *obj_issuer, *obj_subject, *obj_serial_number;
 
     CK_ULONG resultbuf_len;
 
@@ -3212,6 +3278,18 @@ fprintf(stderr, "tclpkcs11_perform_pki_pubkeyinfo objc=%d\n",  objc);
 	obj_pubkey = tclpkcs11_bytearray_to_string((CK_BYTE *)(x509.pubkey.contents) + 1, x509.pubkey.size - 1);
 	Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pubkey", -1));
 	Tcl_ListObjAppendElement(interp, curr_item_list, obj_pubkey);
+	/* Convert the SUBJECT into a readable string */
+	obj_subject = tclpkcs11_bytearray_to_string((CK_BYTE *)(x509.subject.asn1rep), x509.subject.asn1rep_len);
+	Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("subject", -1));
+	Tcl_ListObjAppendElement(interp, curr_item_list, obj_subject);
+	/* Convert the ISSUER into a readable string */
+	obj_issuer = tclpkcs11_bytearray_to_string((CK_BYTE *)(x509.issuer.asn1rep), x509.issuer.asn1rep_len);
+	Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("issuer", -1));
+	Tcl_ListObjAppendElement(interp, curr_item_list, obj_issuer);
+	/* Convert the SERIAL_NUNBER into a readable string */
+	obj_serial_number = tclpkcs11_bytearray_to_string((CK_BYTE *)(x509.serial_number.asn1rep), x509.serial_number.asn1rep_len);
+	Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("serial_number", -1));
+	Tcl_ListObjAppendElement(interp, curr_item_list, obj_serial_number);
 
 	Tcl_SetObjResult(interp, curr_item_list);
 	return(TCL_OK);
@@ -4325,6 +4403,10 @@ MODULE_SCOPE int tclpkcs11_decrypt(ClientData cd, Tcl_Interp *interp, int objc, 
 	return(tclpkcs11_perform_pki(0, cd, interp, objc, objv));
 }
 /*LISSI*/
+MODULE_SCOPE int tclpkcs11_dgst(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
+//fprintf(stderr, "Digest1\n");
+	return(tclpkcs11_perform_pki_dgst(cd, interp, objc, objv));
+}
 MODULE_SCOPE int tclpkcs11_digest(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
 //fprintf(stderr, "Digest1\n");
 	return(tclpkcs11_perform_pki_digest(cd, interp, objc, objv));
@@ -4475,6 +4557,10 @@ int Tclpkcs11_Init(Tcl_Interp *interp) {
 		return(TCL_ERROR);
 	}
 	tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::listcertsder", tclpkcs11_list_certs_der, interpdata, NULL);
+	if (!tclCreatComm_ret) {
+		return(TCL_ERROR);
+	}
+	tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::dgst", tclpkcs11_dgst, interpdata, NULL);
 	if (!tclCreatComm_ret) {
 		return(TCL_ERROR);
 	}
