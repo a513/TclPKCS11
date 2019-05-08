@@ -38,3 +38,5 @@ array set derc [lindex $certsder 0]
 parray derc
 array set certp [pki::x509::parse_cert [binary format H* $derc(cert_der)]]
 parray certp
+array set infopk [pki::pkcs11::pubkeyinfo $derc(cert_der)  [list pkcs11_handle $handle pkcs11_slotid $slotid]] 
+parray infopk

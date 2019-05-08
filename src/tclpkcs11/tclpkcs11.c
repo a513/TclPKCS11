@@ -3154,7 +3154,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_pubkeyinfo(ClientData cd, Tcl_Interp *int
 	struct x509_object x509;
 	ssize_t x509_read_ret;
 
-fprintf(stderr, "tclpkcs11_perform_pki_pubkeyinfo objc=%d\n",  objc);
+//fprintf(stderr, "tclpkcs11_perform_pki_pubkeyinfo objc=%d\n",  objc);
 	if (objc != 3) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::pubkeyinfo cert_der_hex list_token\"", -1));
 		return(TCL_ERROR);
@@ -3983,7 +3983,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 			break;
 		    case 1:
 			chk_rv = handle->pkcs11->C_DestroyObject(handle->session, hObject);
-fprintf(stderr, "Delete cert");
+//fprintf(stderr, "Delete cert");
 			break;
 		    default:
 			break;
