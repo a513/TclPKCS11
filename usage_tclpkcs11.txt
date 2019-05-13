@@ -29,3 +29,4 @@ tclpkcs11 1.0.1
     where  <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pkcs11_id <pkcs11_id> }
 ::pki::pkcs11::keypair <g12_256|g12_512> A <keylist> 	-> list: pubkey pubkey_algo pubkeyinfo type pkcs11_handle pkcs11_slotid pkcs11_id pkcs11_label
     where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid>}
+::pki::pkcs11::listobjects <handle> <slotId>  [<all|cert|privkey|pubkey|data> [value]]  -> list: {<CKO_...> <CKA_LABEL> [<CKA_ID> [<CKA_VALUE>]} ....
