@@ -26,7 +26,7 @@ tclpkcs11 1.0.1
 ::pki::pkcs11::verify <digest> <signature> <keylist> 	   -> true/false,
     where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pubkeyinfo <asn1 pubkey> }
 ::pki::pkcs11::sign <CKM_GOSTR3410|CKM_GOSTR3410_512> <digest_hex> <keylist> -> signature, 
-    where  <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pkcs11_id <pkcs11_id> }
-::pki::pkcs11::keypair <g12_256|g12_512> A <keylist> 	-> list: pubkey pubkey_algo pubkeyinfo type pkcs11_handle pkcs11_slotid pkcs11_id pkcs11_label
+    where  <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> [pkcs11_id <pkcs11_id> | hobj_privkey <handle private key>] }
+::pki::pkcs11::keypair <g12_256|g12_512> A <keylist> 	-> list: pubkey pubkey_algo pubkeyinfo type pkcs11_handle hobj_privkey hobj_pubkey pkcs11_slotid pkcs11_id pkcs11_label
     where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid>}
-::pki::pkcs11::listobjects <handle> <slotId>  [<all|cert|privkey|pubkey|data> [value]]  -> list: {<CKO_...> <CKA_LABEL> [<CKA_ID> [<CKA_VALUE>]} ....
+::pki::pkcs11::listobjects <handle> <slotId>  [<all|cert|privkey|pubkey|data> [value]]  -> list: {<CKO_...> <HANDLE> <CKA_LABEL> [<CKA_ID> [<CKA_VALUE>]} ....

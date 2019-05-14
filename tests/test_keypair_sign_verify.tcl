@@ -121,9 +121,14 @@ set digest_hex [pki::pkcs11::digest $stribog [encoding convertto utf-8 $tbs_csr]
 #set digest_hex [pki::pkcs11::digest $stribog "1234567890"  $aa]
 puts "HASH=$stribog\ntbs=$tbs_csr\nDIGEST=$digest_hex"
 
+#Для подписи берем handle закрытого ключа
+lappend aa "hobj_privkey"
+lappend aa $genkey(hobj_privkey)
 
-lappend aa "pkcs11_id"
-lappend aa $genkey(pkcs11_id)
+#Для подписи берем закрытый ключ по CKA_ID 
+#lappend aa "pkcs11_id"
+#lappend aa $genkey(pkcs11_id)
+
 set sign1_hex  [pki::pkcs11::sign $ckmpair $digest_hex  $aa]
 parray genkey
 #set pkhex [::asn1pubkeyinfo $genkey(pubkey_algo_asn1) $genkey(gostR3410params) $genkey(gostR3411params) $genkey(pubkey)]
@@ -143,6 +148,8 @@ if {$verify != 1} {
     puts "SIGNATURE OK=$verify"
 }
 
+lappend aa "pkcs11_id"
+lappend aa $genkey(pkcs11_id)
 puts "Сменить метку ключевой пары? Введите да или нет:"
 gets stdin yes
 if {$yes == "да"} {

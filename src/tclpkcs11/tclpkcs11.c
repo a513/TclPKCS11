@@ -1874,8 +1874,8 @@ static char *class_name[] = {
 	"CKO_VENDOR_DEFINED"
 };
 MODULE_SCOPE int tclpkcs11_list_objects(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
-    CK_BYTE *value = NULL;
-    CK_ULONG value_len = 0;
+//    CK_BYTE *value = NULL;
+//    CK_ULONG value_len = 0;
 
 	static CK_BBOOL ltrue = CK_TRUE;
 	struct tclpkcs11_interpdata *interpdata;
@@ -1883,7 +1883,8 @@ MODULE_SCOPE int tclpkcs11_list_objects(ClientData cd, Tcl_Interp *interp, int o
 	Tcl_HashEntry *tcl_handle_entry;
 	Tcl_Obj *tcl_handle, *tcl_slotid;
 	long slotid_long;
-	Tcl_Obj *obj_label, *obj_id, *obj_object, *obj_value;
+	Tcl_Obj *obj_hobj, *obj_label, *obj_id, *obj_object, *obj_value;
+//	Tcl_Obj *obj_hobj1;
 	Tcl_Obj *ret_list, *curr_item_list;
 	int tcl_rv;
 	CK_SLOT_ID slotid;
@@ -1896,7 +1897,7 @@ MODULE_SCOPE int tclpkcs11_list_objects(ClientData cd, Tcl_Interp *interp, int o
         
 	CK_OBJECT_CLASS oclass = 0;
 	CK_BYTE ckaid[20];
-	CK_BYTE *ckavalue;
+//	CK_BYTE *ckavalue;
 	CK_ATTRIBUTE *attr_find_obj;
 
 	CK_ATTRIBUTE attr_find[] = {
@@ -2073,6 +2074,17 @@ MODULE_SCOPE int tclpkcs11_list_objects(ClientData cd, Tcl_Interp *interp, int o
 			name = class_name[oclass];
 		}
 		obj_object = Tcl_NewStringObj(name, strlen(name));
+		
+
+		obj_hobj = Tcl_NewStringObj("hobj", -1);
+		Tcl_AppendObjToObj(obj_hobj, tclpkcs11_bytearray_to_string((const unsigned char *)&hObject, sizeof(CK_OBJECT_HANDLE)));
+/* 
+//Восстановление HANDLE объекта в функциях, где они будут задействованы
+objtype = Tcl_GetString(obj_hobj);
+obj_hobj1 = Tcl_NewStringObj(objtype + 4, -1);
+//tcl_strtobytearray_rv 
+tclpkcs11_string_to_bytearray(obj_hobj1, (CK_OBJECT_HANDLE*)&hObject, Tcl_GetCharLength(obj_hobj1) / 2);
+*/
 //fprintf(stderr, "%s\n", name);
 //fprintf(stderr, "\t label: '%s'\n", label);
 		obj_label = Tcl_NewStringObj((const char *)label, attr_label[0].ulValueLen);
@@ -2113,6 +2125,9 @@ MODULE_SCOPE int tclpkcs11_list_objects(ClientData cd, Tcl_Interp *interp, int o
 		curr_item_list = Tcl_NewObj();
 //		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_object", -1));
 		Tcl_ListObjAppendElement(interp, curr_item_list, obj_object);
+
+//		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("handle_object", -1));
+		Tcl_ListObjAppendElement(interp, curr_item_list, obj_hobj);
 
 //		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_label", -1));
 		Tcl_ListObjAppendElement(interp, curr_item_list, obj_label);
@@ -2670,7 +2685,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_sign(ClientData cd, Tcl_Interp *interp, i
 	char *ckm_mech;
 	int input_len;
 	CK_ULONG resultbuf_len;
-	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL, *tcl_objid = NULL;
+	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL, *tcl_objid = NULL, *tcl_objprivkey = NULL;
 	unsigned long tcl_strtobytearray_rv;
 	Tcl_Obj *tcl_keylist, **tcl_keylist_values, *tcl_keylist_key, *tcl_keylist_val;
 	Tcl_Obj *tcl_mode, *tcl_input;
@@ -2753,6 +2768,11 @@ MODULE_SCOPE int tclpkcs11_perform_pki_sign(ClientData cd, Tcl_Interp *interp, i
 			tcl_objid = tcl_keylist_val;
 			continue;
 		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "hobj_privkey") == 0) {
+			tcl_objprivkey = tcl_keylist_val;
+			continue;
+		}
+		
 	}
 	if (!tcl_handle) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("could not find element named \"pkcs11_handle\" in keylist", -1));
@@ -2766,8 +2786,8 @@ MODULE_SCOPE int tclpkcs11_perform_pki_sign(ClientData cd, Tcl_Interp *interp, i
 		return(TCL_ERROR);
 	}
 
-	if (!tcl_objid) {
-		Tcl_SetObjResult(interp, Tcl_NewStringObj("could not find element named \"pkcs11_id\" in keylist", -1));
+	if (!tcl_objid && !tcl_objprivkey) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("could not find element named \"pkcs11_id or hobj_privkey\" in keylist", -1));
 
 		return(TCL_ERROR);
 	}
@@ -2806,41 +2826,51 @@ MODULE_SCOPE int tclpkcs11_perform_pki_sign(ClientData cd, Tcl_Interp *interp, i
 		return(TCL_ERROR);
 	}
 
+	if (!tcl_objprivkey) {
 	/* CKA_ID */
-	template[0].pValue = ckalloc(Tcl_GetCharLength(tcl_objid) / 2);
-	tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_objid, template[0].pValue, Tcl_GetCharLength(tcl_objid) / 2);
-	template[0].ulValueLen = tcl_strtobytearray_rv;
+	    template[0].pValue = ckalloc(Tcl_GetCharLength(tcl_objid) / 2);
+	    tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_objid, template[0].pValue, Tcl_GetCharLength(tcl_objid) / 2);
+	    template[0].ulValueLen = tcl_strtobytearray_rv;
 
 	/* CKA_CLASS */
-	objectclass_pk = CKO_PRIVATE_KEY;
-	template[1].pValue = &objectclass_pk;
-	template[1].ulValueLen = sizeof(objectclass_pk);
+	    objectclass_pk = CKO_PRIVATE_KEY;
+	    template[1].pValue = &objectclass_pk;
+	    template[1].ulValueLen = sizeof(objectclass_pk);
 
-	chk_rv = handle->pkcs11->C_FindObjectsInit(handle->session, template, sizeof(template) / sizeof(template[0]));
-	if (chk_rv != CKR_OK) {
+	    chk_rv = handle->pkcs11->C_FindObjectsInit(handle->session, template, sizeof(template) / sizeof(template[0]));
+	    if (chk_rv != CKR_OK) {
 		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
 
 		return(TCL_ERROR);
-	}
+	    }
 
-	chk_rv = handle->pkcs11->C_FindObjects(handle->session, &hObject, 1, &foundObjs);
-	if (chk_rv != CKR_OK) {
+	    chk_rv = handle->pkcs11->C_FindObjects(handle->session, &hObject, 1, &foundObjs);
+	    if (chk_rv != CKR_OK) {
 		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
 
 		handle->pkcs11->C_FindObjectsFinal(handle->session);
 
 		return(TCL_ERROR);
-	}
+	    }
 
-	/* Terminate Search */
-	handle->pkcs11->C_FindObjectsFinal(handle->session);
+	    /* Terminate Search */
+	    handle->pkcs11->C_FindObjectsFinal(handle->session);
 
-	if (foundObjs < 1) {
+	    if (foundObjs < 1) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("PKCS11_ERROR MAYBE_LOGIN", -1));
 
 		return(TCL_ERROR);
-	}
+	    }
+	} else {
+	    char *obj;
+	    Tcl_Obj *obj_hobj;
 
+//Восстановление HANDLE объекта в функциях, где они будут задействованы
+	    obj = Tcl_GetString(tcl_objprivkey);
+	    obj_hobj = Tcl_NewStringObj(obj + 4, -1);
+//tcl_strtobytearray_rv 
+	    tclpkcs11_string_to_bytearray(obj_hobj, (CK_OBJECT_HANDLE*)&hObject, Tcl_GetCharLength(obj_hobj) / 2);
+	}
 //fprintf(stderr, "tclpkcs11_perform_pki_sign=PRIV_KEY FIND\n");
 	chk_rv = handle->pkcs11->C_SignInit(handle->session, mechanism, hObject);
 	if (chk_rv != CKR_OK) {
@@ -2884,6 +2914,8 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
 	Tcl_HashEntry *tcl_handle_entry;
 	CK_ULONG curr_attr_idx;
 	Tcl_Obj *obj_label, *obj_id, *obj_key_der, *obj_gostr3411, *obj_gostr3410, *obj_key_type, *obj_key_type_oid;
+	Tcl_Obj *hobj_pub, *hobj_priv;
+
 	Tcl_Obj *obj_gost28147;
 	CK_OBJECT_CLASS *objectclass;
 	Tcl_Obj *curr_item_list;
@@ -3028,14 +3060,18 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
 		return(TCL_ERROR);
 	}
 //fprintf(stderr,"tclpkcs11_perform_pki_keypair SESSION OK\n");
-    chk_rv = handle->pkcs11->C_GenerateKeyPair(handle->session, mechanism_gen,
+	chk_rv = handle->pkcs11->C_GenerateKeyPair(handle->session, mechanism_gen,
                                   pub_template, sizeof(pub_template) / sizeof(CK_ATTRIBUTE),
                                   priv_template, sizeof(priv_template) / sizeof(CK_ATTRIBUTE),
                                   &pub_key, &priv_key);
-    if (chk_rv != CKR_OK) {
+	if (chk_rv != CKR_OK) {
 		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
 		return(TCL_ERROR);
-    }
+	}
+	hobj_pub = Tcl_NewStringObj("hobj", -1);
+	Tcl_AppendObjToObj(hobj_pub, tclpkcs11_bytearray_to_string((const unsigned char *)&pub_key, sizeof(CK_OBJECT_HANDLE)));
+	hobj_priv = Tcl_NewStringObj("hobj", -1);
+	Tcl_AppendObjToObj(hobj_priv, tclpkcs11_bytearray_to_string((const unsigned char *)&priv_key, sizeof(CK_OBJECT_HANDLE)));
 
 //fprintf(stderr,"tclpkcs11_perform_pki_keypair OK len=\n");
 ////// Очищаем templ_pk ////////////////////////////
@@ -3169,6 +3205,12 @@ fprintf(stderr, "tclpkcs11_perform_pki_keypair CKK_GOSTR ERROR\n");
 
 		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_slotid", -1));
 		Tcl_ListObjAppendElement(interp, curr_item_list, tcl_slotid);
+
+		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("hobj_pubkey", -1));
+		Tcl_ListObjAppendElement(interp, curr_item_list, hobj_pub);
+
+		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("hobj_privkey", -1));
+		Tcl_ListObjAppendElement(interp, curr_item_list, hobj_priv);
 
 		Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_id", -1));
 		Tcl_ListObjAppendElement(interp, curr_item_list, obj_id);
@@ -4102,7 +4144,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 	unsigned long tcl_strtobytearray_rv;
 	Tcl_HashEntry *tcl_handle_entry;
 	Tcl_Obj *tcl_keylist, **tcl_keylist_values, *tcl_keylist_key, *tcl_keylist_val;
-	Tcl_Obj *tcl_mode, *tcl_ckaid, *tcl_label;
+	Tcl_Obj *tcl_mode, *tcl_ckaid = NULL, *tcl_label, *tcl_obj = NULL;
 	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL;
 	long slotid_long;
 	int tcl_keylist_llength, idx;
@@ -4131,7 +4173,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 	}
 
 	if (objc != 3) {
-		Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::delete cert|key|all keylist\"", -1));
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::delete cert|key|all|obj keylist\"", -1));
 		return(TCL_ERROR);
 	}
 
@@ -4169,6 +4211,11 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 			i++;
 			continue;
 		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "hobj") == 0) {
+			tcl_obj = tcl_keylist_val;
+			i++;
+			continue;
+		}
 		if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_id") == 0) {
 			tcl_ckaid = tcl_keylist_val;
 //fprintf(stderr,"Delete CKA_ID=\"%s\" \nLenID=%i\n", Tcl_GetString(tcl_ckaid), Tcl_GetCharLength(tcl_ckaid) / 2);
@@ -4192,6 +4239,12 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 		
 	}
 //fprintf(stderr,"tclpkcs11_perform_pki_delete: List END i=%i\n", i);
+	if (!tcl_obj && !tcl_ckaid) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("could not find element named \"pkcs11_id or hobj\" in keylist", -1));
+
+		return(TCL_ERROR);
+	}
+
 	if ((del == 1) && (i != 3)) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid  handle or slot or pkcs11_id", -1));
 		return(TCL_ERROR);
@@ -4228,8 +4281,33 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 		return(TCL_ERROR);
 	}
 
+	if (tcl_obj) {
+		char *obj;
+		Tcl_Obj *obj_hobj;
 
-	if (!strcmp((const char *)mode, "cert") || !strcmp((const char *)mode, "all")) {
+//Восстановление HANDLE объекта в функциях, где они будут задействованы
+		obj = Tcl_GetString(tcl_obj);
+		obj_hobj = Tcl_NewStringObj(obj + 4, -1);
+//tcl_strtobytearray_rv 
+		tclpkcs11_string_to_bytearray(obj_hobj, (CK_OBJECT_HANDLE*)&hObject, Tcl_GetCharLength(obj_hobj) / 2);
+		switch (del) {
+		    case 0:
+			chk_rv = handle->pkcs11->C_SetAttributeValue(handle->session, hObject, attr_update,1);
+//fprintf(stderr, "Rename public_key\n");
+			break;
+		    case 1:
+			chk_rv = handle->pkcs11->C_DestroyObject(handle->session, hObject);
+//fprintf(stderr, "Delete public_key\n");
+			break;
+		    default:
+			break;
+		}
+		if (chk_rv != CKR_OK) {
+		    Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+		    return(TCL_ERROR);
+		}
+	    return(TCL_OK);
+	} else if (!strcmp((const char *)mode, "cert") || !strcmp((const char *)mode, "all")) {
 //fprintf(stderr,"tclpkcs11_perform_pki_delete CERT mode=%s\n", mode);
 	    template[1].pValue = &oclass_cert;
 	    template[1].ulValueLen = sizeof(oclass_cert);
