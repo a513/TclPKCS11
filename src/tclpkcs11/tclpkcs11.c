@@ -3472,8 +3472,8 @@ MODULE_SCOPE int tclpkcs11_perform_pki_pubkeyinfo(ClientData cd, Tcl_Interp *int
 	ssize_t x509_read_ret;
 
 //fprintf(stderr, "tclpkcs11_perform_pki_pubkeyinfo objc=%d\n",  objc);
-	if (objc != 3) {
-		Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::pubkeyinfo cert_der_hex list_token\"", -1));
+	if (objc != 3 && objc != 2) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::pubkeyinfo cert_der_hex [list_token]\"", -1));
 		return(TCL_ERROR);
 	}
 
@@ -3488,22 +3488,23 @@ MODULE_SCOPE int tclpkcs11_perform_pki_pubkeyinfo(ClientData cd, Tcl_Interp *int
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("bad certificate", -1));
 		return(TCL_ERROR);
 	}
-	tcl_keylist = objv[2];/*CKA for cert + handle + ckaid*/
-	if (Tcl_IsShared(tcl_keylist)) {
+	if (objc == 3) {
+	    tcl_keylist = objv[2];/*CKA for cert + handle + ckaid*/
+	    if (Tcl_IsShared(tcl_keylist)) {
 		tcl_keylist = Tcl_DuplicateObj(tcl_keylist);
-	}
+	    }
 
-	tcl_rv = Tcl_ListObjGetElements(interp, tcl_keylist, &tcl_keylist_llength, &tcl_keylist_values);
-	if (tcl_rv != TCL_OK) {
+	    tcl_rv = Tcl_ListObjGetElements(interp, tcl_keylist, &tcl_keylist_llength, &tcl_keylist_values);
+	    if (tcl_rv != TCL_OK) {
 		return(tcl_rv);
-	}
+	    }
 
-	if ((tcl_keylist_llength % 2) != 0) {
+	    if ((tcl_keylist_llength % 2) != 0) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("list must have an even number of elements", -1));
 		return(TCL_ERROR);
-	}
-	i = 0;
-	for (idx = 0; idx < tcl_keylist_llength; idx += 2) {
+	    }
+	    i = 0;
+	    for (idx = 0; idx < tcl_keylist_llength; idx += 2) {
 		tcl_keylist_key = tcl_keylist_values[idx];
 		tcl_keylist_val = tcl_keylist_values[idx + 1];
 //fprintf(stderr,"Pubkeyinfo h_slotid=%s\n", Tcl_GetString(tcl_keylist_key));
@@ -3518,59 +3519,64 @@ MODULE_SCOPE int tclpkcs11_perform_pki_pubkeyinfo(ClientData cd, Tcl_Interp *int
 			i++;
 			continue;
 		}
-	}
+	    }
 //fprintf(stderr,"tclpkcs11_perform_pki_pubketyinfo: List END i=%i\n", i);
-	if (i != 2) {
+	    if (i != 2) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid  handle or slot or param", -1));
 		return(TCL_ERROR);
-	}
+	    }
 
-	interpdata = (struct tclpkcs11_interpdata *) cd;
+	    interpdata = (struct tclpkcs11_interpdata *) cd;
 
-	tcl_handle_entry = Tcl_FindHashEntry(&interpdata->handles, (const char *) tcl_handle);
-	if (!tcl_handle_entry) {
+	    tcl_handle_entry = Tcl_FindHashEntry(&interpdata->handles, (const char *) tcl_handle);
+	    if (!tcl_handle_entry) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid handle", -1));
 
 		return(TCL_ERROR);
-	}
+	    }
 
-	handle = (struct tclpkcs11_handle *) Tcl_GetHashValue(tcl_handle_entry);
-	if (!handle) {
+	    handle = (struct tclpkcs11_handle *) Tcl_GetHashValue(tcl_handle_entry);
+	    if (!handle) {
 		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid handle 1", -1));
 
 		return(TCL_ERROR);
-	}
+	    }
 
-	slotid_long = atol(Tcl_GetString(tcl_slotid));
-	slotid = slotid_long;
+	    slotid_long = atol(Tcl_GetString(tcl_slotid));
+	    slotid = slotid_long;
 
-	chk_rv = tclpkcs11_start_session(handle, slotid);
-	if (chk_rv != CKR_OK) {
+	    chk_rv = tclpkcs11_start_session(handle, slotid);
+	    if (chk_rv != CKR_OK) {
 		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
 
 		return(TCL_ERROR);
-	}
+	    }
 //Calculate CKA_ID
-	mechanism = &mechanism_desc_sha1;
-	chk_rv = handle->pkcs11->C_DigestInit(handle->session, mechanism);
-	if (chk_rv != CKR_OK) {
+	    mechanism = &mechanism_desc_sha1;
+	    chk_rv = handle->pkcs11->C_DigestInit(handle->session, mechanism);
+	    if (chk_rv != CKR_OK) {
 		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
 		return(TCL_ERROR);
-	}
-	resultbuf_len = 20;
-	chk_rv = handle->pkcs11->C_Digest(handle->session, (CK_BYTE *)(x509.pubkey.contents) + 1, x509.pubkey.size - 1, (CK_BYTE*)&cka_id, &resultbuf_len);
-	if (chk_rv != CKR_OK) {
+	    }
+	    resultbuf_len = 20;
+	    chk_rv = handle->pkcs11->C_Digest(handle->session, (CK_BYTE *)(x509.pubkey.contents) + 1, x509.pubkey.size - 1, (CK_BYTE*)&cka_id, &resultbuf_len);
+	    if (chk_rv != CKR_OK) {
 		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
 		return(TCL_ERROR);
-	}
+	    }
 //Calculate CKA_ID EMD
 	/* Create the current item list */
-	curr_item_list = Tcl_NewObj();
+	    curr_item_list = Tcl_NewObj();
 	/* Convert the ID into a readable string */
-	obj_id = tclpkcs11_bytearray_to_string((const unsigned char *)&cka_id, 20);
-	Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_id", -1));
-	Tcl_ListObjAppendElement(interp, curr_item_list, obj_id);
-
+	    obj_id = tclpkcs11_bytearray_to_string((const unsigned char *)&cka_id, 20);
+	    Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_id", -1));
+	    Tcl_ListObjAppendElement(interp, curr_item_list, obj_id);
+	} else {
+	/* Create the current item list */
+	    curr_item_list = Tcl_NewObj();
+	    Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("pkcs11_id", -1));
+	    Tcl_ListObjAppendElement(interp, curr_item_list, Tcl_NewStringObj("", -1));
+	}
 	/* Convert the PUBKEYINFO into a readable string */
 	pks = (unsigned char *)x509.pubkeyinfo.asn1rep;
 //fprintf(stderr,"tclpkcs11_perform_pki_pubketyinfo: List PKS=0x%2x,0x%2x,0x%2x,0x%2x,\n", pks[0], pks[1], pks[2], pks[3]);
