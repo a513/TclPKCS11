@@ -95,4 +95,24 @@ if {$yes == "да"} {
     pki::pkcs11::delete cert $uu
     puts "Сертификат удален"
 }
+if {0} {
+	    set uu [dict create pkcs11_handle $::handle]
+	    dict set uu pkcs11_slotid $::slotid_tek
+	    dict set uu pkcs11_label $labcert
+	    dict set uu pkcs11_id $infopk(pkcs11_id)
+	    dict set uu priv_value $private_key_str_hex
+	    dict set uu priv_export "true"
+	    dict set uu pub_value $public_key_str_hex
+	    dict set uu gosthash $asnhash_hex
+	    dict set uu gostsign $asnsign_hex
+	    if {[catch {set impkey [pki::pkcs11::importkey $uu ]} res] } {
+		set impkey 0
+	    }
+	    if {$impkey} {
+		puts "Ключевая пара успешно импортирована:\nCKA_LABEL: $labcert\nCKA_ID: $infopk(pkcs11_id)"
+	    } else {
+		puts "Cannot import pairkey: $res"
+	    }
+}
 exit
+
