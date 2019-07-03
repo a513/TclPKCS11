@@ -3610,9 +3610,6 @@ MODULE_SCOPE int tclpkcs11_perform_pki_pubkeyinfo(ClientData cd, Tcl_Interp *int
 	return(TCL_OK);
 }
 
-
-
-
 MODULE_SCOPE int tclpkcs11_perform_pki_importcert(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
     static CK_BBOOL        ltrue       = CK_TRUE;
     static CK_BBOOL        lfalse      = CK_FALSE;
@@ -3889,6 +3886,338 @@ MODULE_SCOPE int tclpkcs11_perform_pki_importcert(ClientData cd, Tcl_Interp *int
 //	ckfree(templ_certimport[8].pValue);
 //fprintf(stderr,"tclpkcs11_perform_pki_importcert OK\n");
 	Tcl_SetObjResult(interp, tcl_result);
+	return(TCL_OK);
+}
+
+#define PK11_SETATTRS(x,id,v,l) (x)->type = (id); \
+		(x)->pValue=(v); (x)->ulValueLen = (l);
+
+MODULE_SCOPE int tclpkcs11_perform_pki_importkey(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
+    static CK_BBOOL        ltrue       = CK_TRUE;
+    static CK_BBOOL        lfalse      = CK_FALSE;
+/*
+    static CK_BYTE         gost28147params[] = {
+	0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x05, 0x01, 0x01
+    };
+*/
+    CK_VOID_PTR       pval[20];
+    int cv;
+    CK_KEY_TYPE key_type = CKK_GOSTR3410;
+    CK_KEY_TYPE key_type_512 = CKK_GOSTR3410_512;
+
+    CK_ATTRIBUTE pub_tmpl[20];
+    CK_ATTRIBUTE priv_tmpl[20];
+    CK_ATTRIBUTE *attrs_pub = NULL;
+    CK_ATTRIBUTE *attrs_priv = NULL;
+    CK_ULONG pub_tmplCount;
+    CK_ULONG priv_tmplCount;
+
+    unsigned long tcl_strtobytearray_rv;
+    static CK_OBJECT_CLASS oclass_pubk  = CKO_PUBLIC_KEY;
+    static CK_OBJECT_CLASS oclass_privk = CKO_PRIVATE_KEY;
+    long serial_num = 0;
+    Tcl_Obj *tcl_result;
+
+    CK_ATTRIBUTE template[] = {
+	        {CKA_ID, NULL, 0},
+	        {CKA_CLASS, NULL, 0},
+    };
+    CK_ULONG resultbuf_len;
+    CK_OBJECT_HANDLE hObj = CK_INVALID_HANDLE;
+    CK_OBJECT_HANDLE hObjPr = CK_INVALID_HANDLE;
+	CK_OBJECT_HANDLE hObject;
+	CK_ULONG foundObjs;
+
+	struct tclpkcs11_interpdata *interpdata;
+	struct tclpkcs11_handle *handle;
+	int i;
+	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL;
+	unsigned long certder_len;
+	Tcl_Obj *tcl_keylist, **tcl_keylist_values, *tcl_keylist_key, *tcl_keylist_val;
+	Tcl_Obj *tcl_label = NULL; 
+	Tcl_Obj *tcl_ckaid = NULL;
+	Tcl_Obj *tcl_priv_value = NULL;
+	Tcl_Obj *tcl_priv_export = NULL;
+	Tcl_Obj *tcl_gosthash = NULL;
+	Tcl_Obj *tcl_gostsign = NULL;
+	Tcl_Obj *tcl_pub_value = NULL;
+	long slotid_long;
+	int tcl_keylist_llength, idx;
+	CK_SLOT_ID slotid;
+	CK_RV chk_rv;
+	Tcl_HashEntry *tcl_handle_entry;
+	int tcl_rv;
+	struct x509_object x509;
+	ssize_t x509_read_ret;
+
+//fprintf(stderr, "tclpkcs11_perform_pki_importkey objc=%d\n",  objc);
+	if (objc != 2) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::importkey list_token and cka for keys\"", -1));
+		return(TCL_ERROR);
+	}
+//fprintf(stderr, "tclpkcs11_perform_pki_importkey TEMPL END\n");
+//Заполняем templ конец
+	tcl_keylist = objv[1];/*CKA for cert + handle + ckaid*/
+	if (Tcl_IsShared(tcl_keylist)) {
+		tcl_keylist = Tcl_DuplicateObj(tcl_keylist);
+	}
+
+	tcl_rv = Tcl_ListObjGetElements(interp, tcl_keylist, &tcl_keylist_llength, &tcl_keylist_values);
+	if (tcl_rv != TCL_OK) {
+		return(tcl_rv);
+	}
+
+	if ((tcl_keylist_llength % 2) != 0) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("list must have an even number of elements", -1));
+		return(TCL_ERROR);
+	}
+	i = 0;
+	for (idx = 0; idx < tcl_keylist_llength; idx += 2) {
+		tcl_keylist_key = tcl_keylist_values[idx];
+		tcl_keylist_val = tcl_keylist_values[idx + 1];
+//fprintf(stderr,"Import h_slotid=%s\n", Tcl_GetString(tcl_keylist_key));
+
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_handle") == 0) {
+			tcl_handle = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_slotid") == 0) {
+			tcl_slotid = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_label") == 0) {
+			tcl_label = tcl_keylist_val;
+//fprintf(stderr,"CKA_LABEL=%s\n", Tcl_GetString(tcl_label));
+/*
+			templ_certimport[5].pValue = Tcl_GetString(tcl_label);
+			templ_certimport[5].ulValueLen = (unsigned long)strlen(Tcl_GetString(tcl_label));
+			attr_update[0].pValue = Tcl_GetString(tcl_label);
+			attr_update[0].ulValueLen = templ_certimport[5].ulValueLen;
+*/
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_id") == 0) {
+			tcl_ckaid = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "priv_value") == 0) {
+			tcl_priv_value = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "pub_value") == 0) {
+			tcl_pub_value = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "priv_export") == 0) {
+			tcl_priv_export = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "gosthash") == 0) {
+			tcl_gosthash = tcl_keylist_val;
+			i++;
+			continue;
+		}
+		if (strcmp(Tcl_GetString(tcl_keylist_key), "gostsign") == 0) {
+			tcl_gostsign = tcl_keylist_val;
+			i++;
+			continue;
+		}
+	}
+//fprintf(stderr,"tclpkcs11_perform_pki_importkey: List END i=%i\n", i);
+	if (i != 9) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid  handle or slot or param", -1));
+		return(TCL_ERROR);
+	}
+//fprintf(stderr,"tclpkcs11_perform_pki_importkey: List END i=%i\n", i);
+
+	interpdata = (struct tclpkcs11_interpdata *) cd;
+
+	tcl_handle_entry = Tcl_FindHashEntry(&interpdata->handles, (const char *) tcl_handle);
+	if (!tcl_handle_entry) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid handle", -1));
+
+		return(TCL_ERROR);
+	}
+
+	handle = (struct tclpkcs11_handle *) Tcl_GetHashValue(tcl_handle_entry);
+	if (!handle) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid handle", -1));
+
+		return(TCL_ERROR);
+	}
+
+	slotid_long = atol(Tcl_GetString(tcl_slotid));
+	slotid = slotid_long;
+
+	chk_rv = tclpkcs11_start_session(handle, slotid);
+	if (chk_rv != CKR_OK) {
+		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+
+		return(TCL_ERROR);
+	}
+	cv = 0;
+	pval[cv] = ckalloc(Tcl_GetCharLength(tcl_ckaid) / 2);
+	template[0].pValue = pval[cv];
+	cv++;
+	pval[cv] = NULL;
+	
+	tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_ckaid, template[0].pValue, Tcl_GetCharLength(tcl_ckaid) / 2);
+	template[0].ulValueLen = tcl_strtobytearray_rv;
+	template[1].pValue = &oclass_privk;
+	template[1].ulValueLen = sizeof(oclass_privk);
+
+	chk_rv = handle->pkcs11->C_FindObjectsInit(handle->session, template, sizeof(template) / sizeof(CK_ATTRIBUTE));
+	if (chk_rv != CKR_OK) {
+		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+
+		return(TCL_ERROR);
+	}
+
+	chk_rv = handle->pkcs11->C_FindObjects(handle->session, &hObject, 1, &foundObjs);
+	if (chk_rv != CKR_OK) {
+	    ckfree(template[0].pValue);
+	    Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+
+	    handle->pkcs11->C_FindObjectsFinal(handle->session);
+
+	    return(TCL_ERROR);
+	}
+	/* Terminate Search */
+	handle->pkcs11->C_FindObjectsFinal(handle->session);
+//fprintf(stderr, "tclpkcs11_perform_pki_importkey:private key final Find=%lu\n", foundObjs);
+
+	if (foundObjs > 0) {
+	    ckfree(template[0].pValue);
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj("Private Key with the CKA_ID exist", -1));
+	    return(TCL_ERROR);
+	}
+
+	template[1].pValue = &oclass_pubk;
+	template[1].ulValueLen = sizeof(oclass_pubk);
+
+	chk_rv = handle->pkcs11->C_FindObjectsInit(handle->session, template, sizeof(template) / sizeof(CK_ATTRIBUTE));
+	if (chk_rv != CKR_OK) {
+	    ckfree(template[0].pValue);
+	    Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+	    return(TCL_ERROR);
+	}
+
+	chk_rv = handle->pkcs11->C_FindObjects(handle->session, &hObject, 1, &foundObjs);
+	if (chk_rv != CKR_OK) {
+	    ckfree(template[0].pValue);
+	    Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+	    handle->pkcs11->C_FindObjectsFinal(handle->session);
+	    return(TCL_ERROR);
+	}
+	/* Terminate Search */
+	handle->pkcs11->C_FindObjectsFinal(handle->session);
+//fprintf(stderr, "tclpkcs11_perform_pki_importkey:public key final Find=%lu\n", foundObjs);
+
+	if (foundObjs > 0) {
+	    ckfree(template[0].pValue);
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj("Public Key with the CKA_ID exist", -1));
+	    return(TCL_ERROR);
+	}
+
+	attrs_pub = pub_tmpl;
+	attrs_priv = priv_tmpl;
+	PK11_SETATTRS(attrs_priv, CKA_TOKEN, &ltrue, sizeof(ltrue)); attrs_priv++;
+	PK11_SETATTRS(attrs_pub, CKA_TOKEN, &ltrue, sizeof(ltrue)); attrs_pub++;
+	PK11_SETATTRS(attrs_pub, CKA_PRIVATE, &lfalse, sizeof(lfalse)); attrs_pub++;
+	PK11_SETATTRS(attrs_priv, CKA_PRIVATE, &ltrue, sizeof(ltrue)); attrs_priv++;
+
+	PK11_SETATTRS(attrs_pub, CKA_CLASS, &oclass_pubk, sizeof(oclass_pubk)); attrs_pub++;
+	PK11_SETATTRS(attrs_priv, CKA_CLASS, &oclass_privk, sizeof(oclass_privk)); attrs_priv++;
+	if (Tcl_GetCharLength(tcl_priv_value) == 64) {
+	    PK11_SETATTRS(attrs_pub, CKA_KEY_TYPE, &key_type, sizeof(key_type)); attrs_pub++;
+	    PK11_SETATTRS(attrs_priv, CKA_KEY_TYPE, &key_type, sizeof(key_type)); attrs_priv++;
+	} else{
+	    PK11_SETATTRS(attrs_pub, CKA_KEY_TYPE, &key_type_512, sizeof(key_type_512)); attrs_pub++;
+	    PK11_SETATTRS(attrs_priv, CKA_KEY_TYPE, &key_type_512, sizeof(key_type_512)); attrs_priv++;
+	}
+	PK11_SETATTRS(attrs_priv, CKA_ID, pval[0], 20); attrs_priv++;
+	PK11_SETATTRS(attrs_pub, CKA_ID, pval[0], 20); attrs_pub++;
+	PK11_SETATTRS(attrs_priv, CKA_LABEL, Tcl_GetString(tcl_label), strlen(Tcl_GetString(tcl_label)) + 1); attrs_priv++;
+	PK11_SETATTRS(attrs_pub, CKA_LABEL, Tcl_GetString(tcl_label), strlen(Tcl_GetString(tcl_label)) + 1); attrs_pub++;
+	PK11_SETATTRS(attrs_pub, CKA_ENCRYPT, &ltrue, sizeof(ltrue)); attrs_pub++;
+	PK11_SETATTRS(attrs_pub, CKA_VERIFY, &ltrue, sizeof(ltrue)); attrs_pub++;
+	PK11_SETATTRS(attrs_pub, CKA_WRAP, &ltrue, sizeof(ltrue)); attrs_pub++;
+	if(strcmp(Tcl_GetString(tcl_priv_export), "true") != 0 ) {
+	    PK11_SETATTRS(attrs_priv, CKA_EXTRACTABLE, &lfalse, sizeof(lfalse)); attrs_priv++;
+//	    PK11_SETATTRS(attrs_priv, CKA_SENSITIVE, &ltrue, sizeof(ltrue)); attrs_priv++;
+	}
+	else{
+	    PK11_SETATTRS(attrs_priv, CKA_EXTRACTABLE, &ltrue, sizeof(ltrue)); attrs_priv++;
+	    PK11_SETATTRS(attrs_priv, CKA_SENSITIVE, &lfalse, sizeof(lfalse)); attrs_priv++;
+	}
+	PK11_SETATTRS(attrs_priv, CKA_DECRYPT, &ltrue, sizeof(ltrue)); attrs_priv++;
+	PK11_SETATTRS(attrs_priv, CKA_UNWRAP, &ltrue, sizeof(ltrue)); attrs_priv++;
+	PK11_SETATTRS(attrs_priv, CKA_SIGN, &ltrue, sizeof(ltrue)); attrs_priv++;
+	PK11_SETATTRS(attrs_priv, CKA_DERIVE, &ltrue, sizeof(ltrue)); attrs_priv++;
+
+	pval[cv] = ckalloc(Tcl_GetCharLength(tcl_gosthash) / 2);
+	tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_gosthash, pval[cv], Tcl_GetCharLength(tcl_gosthash) / 2);
+	PK11_SETATTRS(attrs_priv, CKA_GOSTR3411PARAMS, pval[cv], Tcl_GetCharLength(tcl_gosthash) / 2); attrs_priv++;
+	PK11_SETATTRS(attrs_pub, CKA_GOSTR3411PARAMS, pval[cv], Tcl_GetCharLength(tcl_gosthash) / 2); attrs_pub++;
+	cv ++;
+	pval[cv] = NULL;
+	pval[cv] = ckalloc(Tcl_GetCharLength(tcl_gostsign) / 2);
+	tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_gostsign, pval[cv], Tcl_GetCharLength(tcl_gostsign) / 2);
+	PK11_SETATTRS(attrs_priv, CKA_GOSTR3410PARAMS, pval[cv], Tcl_GetCharLength(tcl_gostsign) / 2); attrs_priv++;
+	PK11_SETATTRS(attrs_pub, CKA_GOSTR3410PARAMS, pval[cv], Tcl_GetCharLength(tcl_gostsign) / 2); attrs_pub++;
+	cv ++;
+	pval[cv] = NULL;
+
+	pval[cv] = ckalloc(Tcl_GetCharLength(tcl_priv_value) / 2);
+	tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_priv_value, pval[cv], Tcl_GetCharLength(tcl_priv_value) / 2);
+	PK11_SETATTRS(attrs_priv, CKA_VALUE, pval[cv], Tcl_GetCharLength(tcl_priv_value) / 2); attrs_priv++;
+	cv ++;
+	pval[cv] = NULL;
+	pval[cv] = ckalloc(Tcl_GetCharLength(tcl_pub_value) / 2);
+	tcl_strtobytearray_rv = tclpkcs11_string_to_bytearray(tcl_pub_value, pval[cv], Tcl_GetCharLength(tcl_pub_value) / 2);
+	PK11_SETATTRS(attrs_pub, CKA_VALUE, pval[cv], Tcl_GetCharLength(tcl_pub_value) / 2); attrs_pub++;
+	cv ++;
+	pval[cv] = NULL;
+
+	pub_tmplCount = (attrs_pub - pub_tmpl);
+	chk_rv = handle->pkcs11->C_CreateObject(handle->session, pub_tmpl, pub_tmplCount, &hObj);
+	if (chk_rv != CKR_OK) {
+	    cv = 0;
+	    while (pval[cv] != NULL) {
+		ckfree(pval[cv]);
+		pval[cv] = NULL;
+		cv++;
+	    }
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("importkey: cannot create publickey", -1));
+		return(TCL_ERROR);
+	}
+	priv_tmplCount = (attrs_priv - priv_tmpl);
+	chk_rv = handle->pkcs11->C_CreateObject(handle->session, priv_tmpl, priv_tmplCount, &hObjPr);
+	if (chk_rv != CKR_OK) {
+	    cv = 0;
+	    while (pval[cv] != NULL) {
+		ckfree(pval[cv]);
+		pval[cv] = NULL;
+		cv++;
+	    }
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj("importkey: cannot create privatekey", -1));
+	    return(TCL_ERROR);
+	}
+	
+	cv = 0;
+	while (pval[cv] != NULL) {
+	    ckfree(pval[cv]);
+	    pval[cv] = NULL;
+	    cv++;
+	}
+	Tcl_SetObjResult(interp, Tcl_NewStringObj("1", -1));
 	return(TCL_OK);
 }
 
@@ -4832,11 +5161,15 @@ MODULE_SCOPE int tclpkcs11_verify(ClientData cd, Tcl_Interp *interp, int objc, T
 	return(tclpkcs11_perform_pki_verify(cd, interp, objc, objv));
 }
 MODULE_SCOPE int tclpkcs11_importcert(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
-//fprintf(stderr, "Verify START\n");
+//fprintf(stderr, "ImportCert START\n");
 	return(tclpkcs11_perform_pki_importcert(cd, interp, objc, objv));
 }
+MODULE_SCOPE int tclpkcs11_importkey(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
+//fprintf(stderr, "ImportKey START\n");
+	return(tclpkcs11_perform_pki_importkey(cd, interp, objc, objv));
+}
 MODULE_SCOPE int tclpkcs11_pubkeyinfo(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
-//fprintf(stderr, "Verify START\n");
+//fprintf(stderr, "PubKeyInfo START\n");
 	return(tclpkcs11_perform_pki_pubkeyinfo(cd, interp, objc, objv));
 }
 
@@ -4993,6 +5326,10 @@ int Tclpkcs11_Init(Tcl_Interp *interp) {
 		return(TCL_ERROR);
 	}
 	tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::importcert", tclpkcs11_importcert, interpdata, NULL);
+	if (!tclCreatComm_ret) {
+		return(TCL_ERROR);
+	}
+	tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::importkey", tclpkcs11_importkey, interpdata, NULL);
 	if (!tclCreatComm_ret) {
 		return(TCL_ERROR);
 	}
