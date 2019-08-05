@@ -1062,19 +1062,22 @@ MODULE_SCOPE int tclpkcs11_load_module(ClientData cd, Tcl_Interp *interp, int ob
 	}
 /*LISSI*/
 //fprintf (stderr, "tclpkcs11_load_module: 10\n");
-
+/*
 	initargs.CreateMutex = tclpkcs11_create_mutex;
 	initargs.DestroyMutex = tclpkcs11_destroy_mutex;
 	initargs.LockMutex = tclpkcs11_lock_mutex;
 	initargs.UnlockMutex = tclpkcs11_unlock_mutex;
 	initargs.flags = 0;
-/*LISSI*/
+//LISSI
 	initargs.LibraryParameters = NULL;
-/*	initargs.LibraryFlags = NULL;*/
+//	initargs.LibraryFlags = NULL;
 
 	initargs.pReserved = NULL;
 
 	chk_rv = pkcs11_function_list->C_Initialize(&initargs);
+*/
+	chk_rv = pkcs11_function_list->C_Initialize(NULL);
+
 	if (chk_rv != CKR_OK) {
 /*LISSI*/
 //fprintf (stderr, "tclpkcs11_load_module: 11 pathname=%s\n", pathname);
@@ -3915,14 +3918,11 @@ MODULE_SCOPE int tclpkcs11_perform_pki_importkey(ClientData cd, Tcl_Interp *inte
     unsigned long tcl_strtobytearray_rv;
     static CK_OBJECT_CLASS oclass_pubk  = CKO_PUBLIC_KEY;
     static CK_OBJECT_CLASS oclass_privk = CKO_PRIVATE_KEY;
-    long serial_num = 0;
-    Tcl_Obj *tcl_result;
 
     CK_ATTRIBUTE template[] = {
 	        {CKA_ID, NULL, 0},
 	        {CKA_CLASS, NULL, 0},
     };
-    CK_ULONG resultbuf_len;
     CK_OBJECT_HANDLE hObj = CK_INVALID_HANDLE;
     CK_OBJECT_HANDLE hObjPr = CK_INVALID_HANDLE;
 	CK_OBJECT_HANDLE hObject;
@@ -3932,7 +3932,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_importkey(ClientData cd, Tcl_Interp *inte
 	struct tclpkcs11_handle *handle;
 	int i;
 	Tcl_Obj *tcl_handle = NULL, *tcl_slotid = NULL;
-	unsigned long certder_len;
+//	unsigned long certder_len;
 	Tcl_Obj *tcl_keylist, **tcl_keylist_values, *tcl_keylist_key, *tcl_keylist_val;
 	Tcl_Obj *tcl_label = NULL; 
 	Tcl_Obj *tcl_ckaid = NULL;
@@ -3947,8 +3947,6 @@ MODULE_SCOPE int tclpkcs11_perform_pki_importkey(ClientData cd, Tcl_Interp *inte
 	CK_RV chk_rv;
 	Tcl_HashEntry *tcl_handle_entry;
 	int tcl_rv;
-	struct x509_object x509;
-	ssize_t x509_read_ret;
 
 //fprintf(stderr, "tclpkcs11_perform_pki_importkey objc=%d\n",  objc);
 	if (objc != 2) {
