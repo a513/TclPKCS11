@@ -1899,7 +1899,7 @@ MODULE_SCOPE int tclpkcs11_list_objects(ClientData cd, Tcl_Interp *interp, int o
         CK_UTF8CHAR label[2048];
         
 	CK_OBJECT_CLASS oclass = 0;
-	CK_BYTE ckaid[20];
+	CK_BYTE ckaid[2048];
 //	CK_BYTE *ckavalue;
 	CK_ATTRIBUTE *attr_find_obj;
 
@@ -2100,7 +2100,7 @@ tclpkcs11_string_to_bytearray(obj_hobj1, (CK_OBJECT_HANDLE*)&hObject, Tcl_GetCha
 			return(TCL_ERROR);
 		    }
 					// Convert the ID into a readable string 
-		    obj_id = tclpkcs11_bytearray_to_string(ckaid, sizeof(ckaid));
+		    obj_id = tclpkcs11_bytearray_to_string(ckaid, attr_ckaid[0].ulValueLen);
 		} else {
 		    obj_id = Tcl_NewStringObj("NONE", -1);
 		}
@@ -2117,7 +2117,7 @@ tclpkcs11_string_to_bytearray(obj_hobj1, (CK_OBJECT_HANDLE*)&hObject, Tcl_GetCha
 		    attr_ckavalue[0].pValue = ckalloc(attr_ckavalue[0].ulValueLen);
 		    chk_rv = handle->pkcs11->C_GetAttributeValue(handle->session, hObject, attr_ckavalue, sizeof(attr_ckavalue)/sizeof(CK_ATTRIBUTE));
 		    if (chk_rv != CKR_OK) {
-			Tcl_SetObjResult(interp, Tcl_NewStringObj("C_GetAttributeValue CKA_VALUE for CKA_OBJECT_CLASS.", -1));
+			Tcl_SetObjResult(interp, Tcl_NewStringObj("C_GetAttributeValue CKA_VALUE 1 for CKA_OBJECT_CLASS.", -1));
 			handle->pkcs11->C_FindObjectsFinal(handle->session);
 			return(TCL_ERROR);
 		    }
@@ -3822,7 +3822,11 @@ MODULE_SCOPE int tclpkcs11_perform_pki_importcert(ClientData cd, Tcl_Interp *int
 
 	chk_rv = handle->pkcs11->C_CreateObject(handle->session, templ_certimport, sizeof(templ_certimport) / sizeof(CK_ATTRIBUTE), &pub_key);
 	if (chk_rv != CKR_OK) {
-		Tcl_SetObjResult(interp, Tcl_NewStringObj("importcert: cannot create publickey", -1));
+	    if (chk_rv == 0x101) {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("importcert: cannot create object for certificate, not logged", -1));
+	    } else {
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("importcert: cannot create object for certificate", -1));
+	    }
 		return(TCL_ERROR);
 	}
 //    fprintf(stderr, "C_CreateObject certificate OK\n");
