@@ -19,6 +19,7 @@ tclpkcs11 1.0.1
 ::pki::pkcs11::importcert <cert_der_hex> <keylist> 	   -> pkcs11_id, 
     where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid>}
 ::pki::pkcs11::rеname <cert|key|all> <keylist>		   
+    where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pkcs11_id <pkcs11_id} [pkcs11_label <new label> | pkcs11_id_new <new id> ]
 ::pki::pkcs11::delete <cert|key|all> <keylist>, 
     where <keylist> = {pkcs11_handle <handle> pkcs11_slotid <slotid> pkcs11_id <pkcs11_id}
 ::pki::pkcs11::digest <gostr3411|stribog256|stribog512|sha1>  <source> <keylist> 	-> data, 

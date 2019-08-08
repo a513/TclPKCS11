@@ -4567,8 +4567,26 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 		    if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_label") == 0) {
 			tcl_label = tcl_keylist_val;
 //fprintf(stderr,"CKA_LABEL=%s\n", Tcl_GetString(tcl_label));
+			attr_update[0].type = CKA_LABEL;
 			attr_update[0].pValue = Tcl_GetString(tcl_label);
 			attr_update[0].ulValueLen = (unsigned long)strlen(Tcl_GetString(tcl_label));
+			i++;
+			continue;
+		    }
+		    if (strcmp(Tcl_GetString(tcl_keylist_key), "pkcs11_id_new") == 0) {
+			tcl_label = tcl_keylist_val;
+//fprintf(stderr,"CKA_LABEL=%s\n", Tcl_GetString(tcl_label));
+			attr_update[0].type = CKA_ID;
+			attr_update[0].pValue = ckalloc(Tcl_GetCharLength(tcl_label) / 2);
+			attr_update[0].ulValueLen = tclpkcs11_string_to_bytearray(tcl_label, attr_update[0].pValue, Tcl_GetCharLength(tcl_label) / 2);
+//			template[0].ulValueLen = tcl_strtobytearray_rv;
+
+/*
+
+			attr_update[0].pValue = Tcl_GetString(tcl_label);
+//			attr_update[0].ulValueLen = (unsigned long)strlen(Tcl_GetString(tcl_label));
+			attr_update[0].ulValueLen = (unsigned long)Tcl_GetCharLength(tcl_label);
+*/
 			i++;
 			continue;
 		    }
@@ -4587,7 +4605,7 @@ MODULE_SCOPE int tclpkcs11_perform_pki_delete(int del, ClientData cd, Tcl_Interp
 		return(TCL_ERROR);
 	}
 	if ((del == 0) && (i != 4)) {
-		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid  handle or slot or pkcs11_id or pkcs11_label", -1));
+		Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid  handle or slot or pkcs11_id or (pkcs11_label or pkcs11_id_new)", -1));
 		return(TCL_ERROR);
 	}
 
