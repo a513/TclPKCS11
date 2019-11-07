@@ -41,4 +41,7 @@ Installation:
 a) for unix, linux, macos
 	./configure_cmake_unix_and_build.sh
 	cp build/lib/tclpkcs11.*  /dest
-b) ...
+b) for ms windows
+	configure_nmake.cmd
+	cd build
+	nmake
