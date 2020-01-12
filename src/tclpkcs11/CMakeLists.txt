@@ -58,6 +58,11 @@ INCLUDE_DIRECTORIES(
     ${CW_LIRBASE}/include/pkcs11
 )
 
+#Проверяем Android
+if( ${ANDROID_ABI} MATCHES "armeabi-v7a" )
+	    target_link_libraries(${LIBRARY_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/tclpkcs11-android/armeabi-v7a/libtclstub8.6.a)
+else  ( ${ANDROID_ABI} MATCHES "armeabi-v7a" )
+
 SET(CW_LIB_PREFIX "${CW_LIRBASE}/${CW_ARCH}/lib/")
 
 IF (CMAKE_HOST_WIN32)
@@ -83,3 +88,5 @@ ELSEIF (CMAKE_HOST_UNIX)
         dl
     )
 ENDIF (CMAKE_HOST_WIN32)
+
+endif  ( ${ANDROID_ABI} MATCHES "armeabi-v7a" )

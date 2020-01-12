@@ -45,3 +45,6 @@ b) for ms windows
 	configure_nmake.cmd
 	cd build
 	nmake
+c) for android
+	./build_ro_android.sh
+	cp build_to_android/lib/tclpkcs11.*  /dest
