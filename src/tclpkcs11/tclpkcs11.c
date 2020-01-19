@@ -2216,6 +2216,9 @@ MODULE_SCOPE int tclpkcs11_inittoken(ClientData cd, Tcl_Interp *interp, int objc
   enteredlabel = Tcl_GetStringFromObj(tcl_tokenlab, &label_len);
   memset(label, ' ', sizeof(label));
   memcpy(label, enteredlabel, label_len);
+
+  tclpkcs11_close_session(handle);
+
   chk_rv = handle->pkcs11->C_InitToken(slotid, (CK_UTF8CHAR_PTR) password, password_len, label);
   switch (chk_rv) {
     case CKR_OK:
