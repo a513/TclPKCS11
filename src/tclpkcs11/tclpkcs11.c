@@ -3431,6 +3431,54 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
       case CKA_ID:
         /* Convert the ID into a readable string */
         obj_id = tclpkcs11_bytearray_to_string(curr_attr->pValue, curr_attr->ulValueLen);
+	if (strlen(obj_id) == 0) {
+	    CK_ATTRIBUTE      attr_update[] = {
+		{ CKA_ID, NULL, 0     },
+	    };
+//Calculare CKA_ID for GOST
+	    CK_MECHANISM     mechanism_desc_sha1 = { CKM_SHA_1, NULL, 0 };
+	    CK_MECHANISM_PTR mechanism;
+	    int idckalen = 0;
+	    unsigned char os64[] = { 0x04, 0x40 };
+	    unsigned char os128[] = { 0x04, 0x81, 0x80 };
+	    unsigned char osfull[132];
+	    int oslen;
+	    if (templ_pk[3].ulValueLen == 64) {
+		oslen = 2;
+		memmove(&osfull[0], os64, 2);
+	    } else if (templ_pk[3].ulValueLen == 128) {
+		oslen = 3;
+		memmove(&osfull[0], os128, 3);
+	    } else {
+		oslen = 0;
+        	fprintf(stderr, "tclpkcs11_perform_pki_keypair : %i\n", templ_pk[3].ulValueLen);
+//		return(TCL_ERROR);
+	    }
+	    memmove(&osfull[oslen], templ_pk[3].pValue,templ_pk[3].ulValueLen);
+	    attr_update[0].pValue = ckalloc(20);
+	    attr_update[0].ulValueLen = 20;
+	    oslen += templ_pk[3].ulValueLen;
+	    
+	    mechanism = &mechanism_desc_sha1;
+	    chk_rv = handle->pkcs11->C_DigestInit(handle->session, mechanism);
+	    if (chk_rv != CKR_OK) {
+		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+    		ckfree(attr_update[0].pValue);
+		return(TCL_ERROR);
+	    }
+	    idckalen = 20;
+	    chk_rv = handle->pkcs11->C_Digest(handle->session, (CK_BYTE *)osfull, oslen, attr_update[0].pValue, &idckalen);
+	    if (chk_rv != CKR_OK) {
+		Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+    		ckfree(attr_update[0].pValue);
+	        return(TCL_ERROR);
+	    }
+	    chk_rv = handle->pkcs11->C_SetAttributeValue(handle->session, pub_key, attr_update,1);
+	    chk_rv = handle->pkcs11->C_SetAttributeValue(handle->session, priv_key, attr_update,1);
+
+    	    obj_id = tclpkcs11_bytearray_to_string(attr_update[0].pValue, attr_update[0].ulValueLen);
+    	    ckfree(attr_update[0].pValue);
+	}
 
         break;
       case CKA_VALUE:
