@@ -726,6 +726,119 @@ char *get_mechanism_name(CK_ULONG mech)
   }
 }
 
+/*oid ro hex + asn*/
+#define digitp(p)   (*(p) >= '0' && *(p) <= '9')
+#define hexdigitp(a) (digitp (a)                     \
+                      || (*(a) >= 'A' && *(a) <= 'F')  \
+                      || (*(a) >= 'a' && *(a) <= 'f'))
+
+static size_t
+make_flagged_int (unsigned long value, char *buf, size_t buflen)
+{
+  int more = 0;
+  int shift;
+
+  /* fixme: figure out the number of bits in an ulong and start with
+     that value as shift (after making it a multiple of 7) a more
+     straigtforward implementation is to do it in reverse order using
+     a temporary buffer - saves a lot of compares */
+  for (more=0, shift=28; shift > 0; shift -= 7)
+    {
+      if (more || value >= (1<<shift))
+        {
+          buf[buflen++] = 0x80 | (value >> shift);
+          value -= (value >> shift) << shift;
+          more = 1;
+        }
+    }
+  buf[buflen++] = value;
+  return buflen;
+}
+int oid_from_str (const char *string, unsigned char **rbuf, size_t *rlength)
+{
+  unsigned char *buf;
+  unsigned char *bufasn;
+  size_t buflen;
+  unsigned long val1, val;
+  const char *endp;
+  int arcno;
+
+  if (!string || !rbuf || !rlength)
+    return -1;
+  *rbuf = NULL;
+  *rlength = 0;
+
+  /* we allow the OID to be prefixed with either "oid." or "OID." */
+  if ( !strncmp (string, "oid.", 4) || !strncmp (string, "OID.", 4))
+    string += 4;
+
+  if (!*string)
+    return -1;
+
+  /* we can safely assume that the encoded OID is shorter than the string */
+//  buf = malloc ( strlen(string) + 2);
+  bufasn = malloc ( strlen(string) + 2 + 2);
+  buf = bufasn + 2;
+  if (!buf)
+    return -1;
+  buflen = 0;
+
+  val1 = 0; /* avoid compiler warnings */
+  arcno = 0;
+  do {
+    arcno++;
+    val = strtoul (string, (char**)&endp, 10);
+    if (!digitp (string) || !(*endp == '.' || !*endp))
+      {
+        free (buf);
+        return -1;
+      }
+    if (*endp == '.')
+      string = endp+1;
+
+    if (arcno == 1)
+      {
+        if (val > 2)
+          break; /* not allowed, error catched below */
+        val1 = val;
+      }
+    else if (arcno == 2)
+      { /* need to combine the first to arcs in one octet */
+        if (val1 < 2)
+          {
+            if (val > 39)
+              {
+                free (buf);
+                return -1;
+              }
+            buf[buflen++] = val1*40 + val;
+          }
+        else
+          {
+            val += 80;
+            buflen = make_flagged_int (val, buf, buflen);
+          }
+      }
+    else
+      {
+        buflen = make_flagged_int (val, buf, buflen);
+      }
+  } while (*endp == '.');
+
+  if (arcno == 1)
+    { /* it is not possible to encode only the first arc */
+      free (buf);
+      return -1;
+    }
+//ASN
+  bufasn[0] = 0x06;
+  bufasn[1] = buflen;
+//  *rbuf = buf;
+  *rbuf = bufasn;
+  *rlength = buflen + 2;
+  return 0;
+}
+
 
 MODULE_SCOPE Tcl_Obj *tclpkcs11_bytearray_to_string(const unsigned char *data, unsigned long datalen) {
   static char alphabet[] = "0123456789abcdef";
@@ -3202,26 +3315,44 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
   CK_OBJECT_CLASS *objectclass;
   Tcl_Obj *curr_item_list;
   static CK_BBOOL        ltrue       = CK_TRUE;
+  static CK_BBOOL        lfalse       = CK_FALSE;
   static CK_OBJECT_CLASS oclass_pub  = CKO_PUBLIC_KEY;
   static CK_OBJECT_CLASS oclass_priv = CKO_PRIVATE_KEY;
   static CK_BYTE         gost28147params_Z[] = {
     0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x05, 0x01, 0x01
   };
-  /* GOST R 34.10-2001 CryptoPro parameter set OIDs*/
+  static CK_BYTE         gost28147params[] = {
+    0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x1f, 0x01
+  };
+/*
+// GOST R 34.10-2001 CryptoPro parameter set OIDs
+//1.2.643.2.2.35.1 -  1.2.643.2.2.35.3 A-C   from CryptoPro
   static CK_BYTE ecc_A_oid[]    = {0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x23, 0x01};
   static CK_BYTE ecc_B_oid[]    = {0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x23, 0x02};
   static CK_BYTE ecc_C_oid[]    = {0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x23, 0x03};
+//1.2.643.2.2.36.0 -  1.2.643.2.2.36.1 XA-XB   from CryptoPro
   static CK_BYTE ecc_XchA_oid[] = {0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x24, 0x00};
   static CK_BYTE ecc_XchB_oid[] = {0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x24, 0x01};
-  /*LISSI 2012*/
-  static CK_BYTE gost3411_2012_256[] = {0x06, 0x08, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x01, 0x02, 0x02};
-  static CK_BYTE gost3411_2012_512[] = {0x06, 0x08, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x01, 0x02, 0x03};
-  /*1.2.643.7.1.1.2.2	id-tc26-gost3411-2012-256	алгоритм хэширования ГОСТ Р 34.11-2012 с длиной 256*/
-  /*CONST_OID gost3411_2012_256[] = {0x2a, 0x85, 0x03, 0x07, 0x01, 0x01, 0x02, 0x02};*/
-  /*1.2.643.7.1.1.2.3	id-tc26-gost3411-2012-512	алгоритм хэширования ГОСТ Р 34.11-2012 с длиной 512*/
-  /*CONST_OID gost3411_2012_512[] = {0x2a, 0x85, 0x03, 0x07, 0x01, 0x01, 0x02, 0x03};*/
+// GOST R 34.10-2012-256 Tk-26 parameter set OIDs
+//1.2.643.7.1.2.1.1.1 -  1.2.643.7.1.2.1.1.4   from tc-26
+  static CK_BYTE tc26_A_oid[]    = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x01};
+  static CK_BYTE tc26_B_oid[]    = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x02};
+  static CK_BYTE tc26_C_oid[]    = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x03};
+  static CK_BYTE tc26_D_oid[]    = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x04};
+//Parameters for GOST-2012-512/
+//1.2.643.7.1.2.1.2.1 -  1.2.643.7.1.2.1.2.3   from tc-26
   static CK_BYTE tc26_decc_A_der_oid[] = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x02, 0x01};
   static CK_BYTE tc26_decc_B_der_oid[] = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x02, 0x02};
+  static CK_BYTE tc26_decc_C_der_oid[] = {0x06, 0x09, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x02, 0x03};
+*/
+
+  /*GOST R 34.11-94*/
+  static CK_BYTE gost3411_94[] = {0x06, 0x07, 0x2a, 0x85, 0x03, 0x02, 0x02, 0x1e, 0x01};
+  /*LISSI 2012*/
+  /*1.2.643.7.1.1.2.2	id-tc26-gost3411-2012-256	алгоритм хэширования ГОСТ Р 34.11-2012 с длиной 256*/
+  static CK_BYTE gost3411_2012_256[] = {0x06, 0x08, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x01, 0x02, 0x02};
+  /*1.2.643.7.1.1.2.3	id-tc26-gost3411-2012-512	алгоритм хэширования ГОСТ Р 34.11-2012 с длиной 512*/
+  static CK_BYTE gost3411_2012_512[] = {0x06, 0x08, 0x2a, 0x85, 0x03, 0x07, 0x01, 0x01, 0x02, 0x03};
 
   CK_OBJECT_HANDLE       pub_key            = CK_INVALID_HANDLE;
   CK_OBJECT_HANDLE       priv_key           = CK_INVALID_HANDLE;
@@ -3232,14 +3363,18 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
     { CKA_GOSTR3410PARAMS,	NULL, 0 },
     { CKA_GOSTR3411PARAMS,  NULL, 0 },
     { CKA_VERIFY,          &ltrue,      sizeof(CK_BBOOL)   },
+    { CKA_WRAP,          &ltrue,      sizeof(CK_BBOOL)   },
     { CKA_GOST28147PARAMS, gost28147params_Z, sizeof(gost28147params_Z) },
   };
   CK_ATTRIBUTE       priv_template[] = {
     { CKA_CLASS,   &oclass_priv, sizeof(oclass_priv) },
     { CKA_TOKEN,   &ltrue,       sizeof(ltrue)       },
     { CKA_PRIVATE, &ltrue,       sizeof(ltrue)       },
+    { CKA_UNWRAP,    &ltrue,       sizeof(CK_BBOOL)    },
     { CKA_SIGN,    &ltrue,       sizeof(CK_BBOOL)    },
+    { CKA_DERIVE,    &ltrue,       sizeof(CK_BBOOL)    },
   };
+
   CK_ATTRIBUTE templ_pk[] = {
     {CKA_CLASS, NULL, 0},
     {CKA_LABEL, NULL, 0},
@@ -3251,6 +3386,8 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
     {CKA_KEY_TYPE, NULL, 0}
   }, *curr_attr;
   int tcl_rv;
+  unsigned char *hexoid = NULL;
+  size_t lenhex;
 
   tcl_key = objv[1];
   tcl_input = objv[2];
@@ -3259,24 +3396,38 @@ MODULE_SCOPE int tclpkcs11_perform_pki_keypair(ClientData cd, Tcl_Interp *interp
     Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::keypair g12_256|g12_512 param_sign list_for_token\"", -1));
     return(TCL_ERROR);
   }
-
   param = Tcl_GetString(tcl_input);
+  tcl_rv = oid_from_str(param, &hexoid, &lenhex);
+  if (tcl_rv == -1) {
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("pki::pkcs11::keypair g12_256|g12_512 param_sign list_for_token: bad parameter for key", -1));
+    return(TCL_ERROR);
+  }
+  pub_template[2].pValue = hexoid;
+  pub_template[2].ulValueLen = lenhex;
+  
   algokey = Tcl_GetString(tcl_key);
   //fprintf(stderr, "tclpkcs11_perform_pki_keypair objc=%d, algokey=%s, param=%s\n",  objc, algokey, param);
+  
   if (!memcmp("g12_256", algokey, 7)) {
     mechanism_gen = &mechanism_desc_256;
-    pub_template[2].pValue = ecc_A_oid;
-    pub_template[2].ulValueLen = sizeof(ecc_A_oid);
+//    pub_template[2].pValue = ecc_A_oid;
+//    pub_template[2].ulValueLen = sizeof(ecc_A_oid);
     pub_template[3].pValue =gost3411_2012_256;
     pub_template[3].ulValueLen = sizeof(gost3411_2012_256);
   } else if (!memcmp("g12_512", algokey, 7)) {
     mechanism_gen = &mechanism_desc_512;
-    pub_template[2].pValue = tc26_decc_A_der_oid;
-    pub_template[2].ulValueLen = sizeof(tc26_decc_A_der_oid);
+//    pub_template[2].pValue = tc26_decc_A_der_oid;
+//    pub_template[2].ulValueLen = sizeof(tc26_decc_A_der_oid);
     pub_template[3].pValue =gost3411_2012_512;
     pub_template[3].ulValueLen = sizeof(gost3411_2012_512);
+  } else if (!memcmp("gost2001", algokey, 8)) {
+    mechanism_gen = &mechanism_desc_256;
+//    pub_template[2].pValue = ecc_XchA_oid;
+//    pub_template[2].ulValueLen = sizeof(ecc_XchA_oid);
+    pub_template[3].pValue =gost3411_94;
+    pub_template[3].ulValueLen = sizeof(gost3411_94);
   } else {
-    Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::keypair g12_256|g12512 param_sign list_for_token\" - bad type key", -1));
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("\"pki::pkcs11::keypair g12_256|g12_512 param_sign list_for_token\" - bad type key", -1));
     return(TCL_ERROR);
   }
   if (Tcl_IsShared(tcl_keylist)) {
