@@ -14,6 +14,8 @@ tclpkcs11 0.9.9
 
 tclpkcs11 1.0.1
 
+::pki::pkcs11::closesession  <handle>               -> TCL_OK | TCL_ERROR 
+    where TCL_OK == 0, TCL_ERROR == 1
 ::pki::pkcs11::listmechs  <handle>  <slotid>               -> list: mech
 ::pki::pkcs11::listcertsder <handle> <slotid>   	   ->  list: cert_der pkcs11_handle pkcs11_id pkcs11_label pkcs11_slotid type
 ::pki::pkcs11::importcert <cert_der_hex> <keylist> 	   -> pkcs11_id, 

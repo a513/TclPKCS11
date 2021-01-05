@@ -1294,6 +1294,50 @@ MODULE_SCOPE int tclpkcs11_unload_module(ClientData cd, Tcl_Interp *interp, int 
 
   return(TCL_OK);
 }
+/*LISSI*/
+MODULE_SCOPE int tclpkcs11_closesession(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
+  struct tclpkcs11_interpdata *interpdata;
+  struct tclpkcs11_handle *handle;
+  Tcl_HashEntry *tcl_handle_entry;
+  Tcl_Obj *tcl_handle;
+
+  if (!cd) {
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid clientdata", -1));
+
+    return(TCL_ERROR);
+  }
+
+  if (objc != 2) {
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # args: should be \"pki::pkcs11::closesession handle\"", -1));
+
+    return(TCL_ERROR);
+  }
+
+  tcl_handle = objv[1];
+
+  interpdata = (struct tclpkcs11_interpdata *) cd;
+
+  tcl_handle_entry = Tcl_FindHashEntry(&interpdata->handles, (const char *) tcl_handle);
+  if (!tcl_handle_entry) {
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid handle", -1));
+
+    return(TCL_ERROR);
+  }
+
+  handle = (struct tclpkcs11_handle *) Tcl_GetHashValue(tcl_handle_entry);
+  if (!handle) {
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("invalid handle", -1));
+
+    return(TCL_ERROR);
+  }
+
+  /* Close the session, cleaning up all the session objects */
+  tclpkcs11_close_session(handle);
+
+  Tcl_SetObjResult(interp, Tcl_NewBooleanObj(1));
+
+  return(TCL_OK);
+}
 
 MODULE_SCOPE int tclpkcs11_list_slots(ClientData cd, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]) {
   struct tclpkcs11_interpdata *interpdata;
@@ -5739,11 +5783,15 @@ int Tclpkcs11_Init(Tcl_Interp *interp) {
   tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::loadmodule", tclpkcs11_load_module, interpdata, NULL);
   if (!tclCreatComm_ret) {
     ckfree((char *) interpdata);
-
     return(TCL_ERROR);
   }
 
   tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::unloadmodule", tclpkcs11_unload_module, interpdata, NULL);
+  if (!tclCreatComm_ret) {
+    return(TCL_ERROR);
+  }
+
+  tclCreatComm_ret = Tcl_CreateObjCommand(interp, "pki::pkcs11::closesession", tclpkcs11_closesession, interpdata, NULL);
   if (!tclCreatComm_ret) {
     return(TCL_ERROR);
   }
