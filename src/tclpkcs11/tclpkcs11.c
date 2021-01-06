@@ -1195,6 +1195,9 @@ MODULE_SCOPE int tclpkcs11_load_module(ClientData cd, Tcl_Interp *interp, int ob
     /*LISSI*/
     //fprintf (stderr, "tclpkcs11_load_module: 11 pathname=%s\n", pathname);
     Tcl_SetObjResult(interp, tclpkcs11_pkcs11_error(chk_rv));
+/*LISSI*/
+    /* Attempt to unload the module */
+    tclpkcs11_int_unload_module(handle);
 
     return(TCL_ERROR);
   }
